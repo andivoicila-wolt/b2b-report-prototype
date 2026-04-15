@@ -26,49 +26,104 @@ const compareKeys = (a, b) => {
   return a.localeCompare(b);
 };
 
+const chapterForSource = (source = "") => {
+  const s = source.toLowerCase();
+  if (s.includes("01a") || s.includes("01b") || s.includes("01c") || s.includes("01d") || s.includes("01e")) {
+    return { id: "chapter-takeaways", title: "Key Takeaways", template: "tiles" };
+  }
+  if (s.includes("slide 2") || s.includes("slide 3") || s.includes("slide 4")) {
+    return { id: "chapter-europe", title: "How Europe Shops Now", template: "story" };
+  }
+  if (s.includes("slide 5") || s.includes("slide 6") || s.includes("slide 7") || s.includes("slide 8") || s.includes("slide 9")) {
+    return { id: "chapter-moments", title: "Shopping Moments & Demand Patterns", template: "story" };
+  }
+  if (s.includes("slide 10") || s.includes("slide 11") || s.includes("slide 12") || s.includes("slide 13") || s.includes("slide 14")) {
+    return { id: "chapter-behavior", title: "Behavioral Shifts", template: "story" };
+  }
+  if (s.includes("slide 16") || s.includes("slide 17") || s.includes("slide 18") || s.includes("slide 19") || s.includes("slide 20") || s.includes("group 57") || s.includes("group 58") || s.includes("group 59")) {
+    return { id: "chapter-outlook", title: "Outlook & Strategic Implications", template: "story" };
+  }
+  return { id: "chapter-other", title: "Additional Pages", template: "story" };
+};
+
+const groupByChapter = (rows) => {
+  const map = new Map();
+  rows.forEach((row) => {
+    const chapter = chapterForSource(row.source || "");
+    if (!map.has(chapter.id)) {
+      map.set(chapter.id, { ...chapter, items: [] });
+    }
+    map.get(chapter.id).items.push(row);
+  });
+  return Array.from(map.values());
+};
+
+const metricChips = (metrics = []) => {
+  if (!metrics.length) return "";
+  return `<div class="metrics">${metrics.map((m) => `<span class="metric">${m}</span>`).join("")}</div>`;
+};
+
+const tileItem = (row, slide) => `
+  <article class="insight-tile">
+    <figure class="visual">
+      ${slide ? `<img src="${slide}" alt="${row.title}" loading="lazy" decoding="async" />` : ""}
+    </figure>
+    <div class="tile-body">
+      <h4>${row.title}</h4>
+      <p>${row.summary || "No extractable text found."}</p>
+      ${metricChips(row.metrics || [])}
+    </div>
+  </article>
+`;
+
+const storyItem = (row, slide, i) => `
+  <article class="story-block ${i % 2 ? "flip" : ""}">
+    <div class="content">
+      <h4>${row.title}</h4>
+      <p class="meta">${row.source || "Source PDF"}</p>
+      <p>${row.summary || "No extractable text found."}</p>
+      ${metricChips(row.metrics || [])}
+    </div>
+    <figure class="visual">
+      ${slide ? `<img src="${slide}" alt="${row.title}" loading="lazy" decoding="async" />` : ""}
+      <figcaption>Slide-derived design reference</figcaption>
+    </figure>
+  </article>
+`;
+
 const render = (contentRows, slideRows) => {
   const orderedSlides = Array.from(new Set(slideRows)).sort(compareKeys);
+  const merged = contentRows.map((row, i) => ({ ...row, slide: orderedSlides[i] || "" }));
+  const chapters = groupByChapter(merged);
 
-  contentRows.forEach((row, i) => {
-    const id = `section-${row.id}`;
-    const slide = orderedSlides[i] || orderedSlides[0] || "";
+  chapters.forEach((chapter) => {
+    const section = document.createElement("section");
+    section.className = "chapter card";
+    section.id = chapter.id;
+    section.dataset.search = `${chapter.title} ${chapter.items.map((i) => `${i.title} ${i.summary} ${(i.metrics || []).join(" ")}`).join(" ")}`.toLowerCase();
 
-    const article = document.createElement("article");
-    article.className = "section-card card";
-    article.id = id;
-    article.dataset.search = `${row.title} ${row.section} ${row.summary} ${(row.metrics || []).join(" ")}`.toLowerCase();
+    const intro = `<header class="chapter-head"><h3>${chapter.title}</h3><p>${chapter.items.length} converted pages</p></header>`;
 
-    const chips = (row.metrics || []).map((m) => `<span class="metric">${m}</span>`).join("");
+    const body =
+      chapter.template === "tiles"
+        ? `<div class="tile-grid">${chapter.items.map((item) => tileItem(item, item.slide)).join("")}</div>`
+        : `<div class="story-list">${chapter.items.map((item, i) => storyItem(item, item.slide, i)).join("")}</div>`;
 
-    article.innerHTML = `
-      <div class="section-grid">
-        <div class="content">
-          <h3>${row.title || row.section || `Section ${row.id}`}</h3>
-          <p class="meta">${row.source || "Source PDF"}</p>
-          <p class="summary">${row.summary || "No extractable text found for this section."}</p>
-          <div class="metrics">${chips}</div>
-        </div>
-        <figure class="visual">
-          ${slide ? `<img src="${slide}" alt="Reference visual for ${row.title}" loading="lazy" decoding="async" />` : ""}
-          <figcaption>Slide-derived visual reference</figcaption>
-        </figure>
-      </div>
-    `;
+    section.innerHTML = `${intro}${body}`;
+    sectionsEl.appendChild(section);
 
-    sectionsEl.appendChild(article);
-
-    const tocLink = document.createElement("a");
-    tocLink.className = "toc-item";
-    tocLink.href = `#${id}`;
-    tocLink.textContent = `${row.id}. ${row.title || row.section || "Section"}`;
-    tocEl.appendChild(tocLink);
+    const toc = document.createElement("a");
+    toc.className = "toc-item";
+    toc.href = `#${chapter.id}`;
+    toc.textContent = chapter.title;
+    tocEl.appendChild(toc);
   });
 };
 
 const bindSearch = () => {
   searchInput.addEventListener("input", () => {
     const q = searchInput.value.trim().toLowerCase();
-    document.querySelectorAll(".section-card").forEach((el) => {
+    document.querySelectorAll(".chapter").forEach((el) => {
       const hit = !q || el.dataset.search.includes(q);
       el.classList.toggle("hidden", !hit);
     });
@@ -81,18 +136,16 @@ const bindActiveToc = () => {
 
   const io = new IntersectionObserver(
     (entries) => {
-      const active = entries
-        .filter((e) => e.isIntersecting)
-        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      const active = entries.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
       if (!active) return;
       links.forEach((l) => l.classList.remove("active"));
       const link = map.get(active.target.id);
       if (link) link.classList.add("active");
     },
-    { threshold: [0.45, 0.6] }
+    { threshold: [0.35, 0.55] }
   );
 
-  document.querySelectorAll(".section-card").forEach((el) => io.observe(el));
+  document.querySelectorAll(".chapter").forEach((el) => io.observe(el));
 };
 
 const init = async () => {
