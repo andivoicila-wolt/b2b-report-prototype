@@ -11,7 +11,7 @@ const sortKey = (src) => {
   const slide = name.match(/^b2b-report-slide-(\d+)([a-z])?$/);
   if (slide) return [1, Number(slide[1]), alphaWeight(slide[2] || ""), 0, 0];
 
-  const variant = name.match(/^b2b-report-slide-(\d+)([a-z])-(\d+)$/);
+  const variant = name.match(/^b2b-report-slide-(\d+)([a-z])-(\d+)-?$/);
   if (variant) return [1, Number(variant[1]), alphaWeight(variant[2]), Number(variant[3]), 0];
 
   const group = name.match(/^group-(\d+)$/);

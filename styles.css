@@ -35,9 +35,7 @@ body {
 .frame img {
   width: min(100vw, 1920px);
   height: auto;
-  aspect-ratio: 16 / 9;
   display: block;
-  object-fit: contain;
   user-select: none;
   -webkit-user-drag: none;
 }
