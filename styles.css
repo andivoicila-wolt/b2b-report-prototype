@@ -120,3 +120,25 @@ body.ui-hidden .page {
     margin-top: 78px;
   }
 }
+
+.semantic {
+  width: min(100vw, 1920px);
+  margin: 0 auto;
+  background: #0f1722;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 20px clamp(14px, 3.5vw, 44px);
+}
+
+.semantic h2 {
+  margin: 0 0 12px;
+  font-size: clamp(1.1rem, 2.2vw, 1.55rem);
+  line-height: 1.25;
+  color: #e9f2ff;
+}
+
+.semantic p {
+  margin: 0 0 10px;
+  color: #c8d9eb;
+  line-height: 1.6;
+  font-size: clamp(0.95rem, 1.2vw, 1.05rem);
+}

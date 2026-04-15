@@ -2,13 +2,11 @@ const pageStream = document.getElementById("pageStream");
 const counter = document.getElementById("counter");
 const toggleChrome = document.getElementById("toggleChrome");
 
-const cleanLabel = (src) =>
-  src
-    .split("/")
-    .pop()
-    .replace(/\.png$/i, "")
-    .replace(/^b2b-report-/, "")
-    .replace(/-/g, " ")
+const humanize = (name) =>
+  name
+    .replace(/\.pdf$/i, "")
+    .replace(/^b2b report\s*-\s*/i, "")
+    .replace(/\s+/g, " ")
     .trim();
 
 const alphaWeight = (letter = "") => (letter ? letter.toLowerCase().charCodeAt(0) - 96 : 0);
@@ -40,23 +38,45 @@ const compareKeys = (a, b) => {
   return a.localeCompare(b);
 };
 
-const buildPages = (slides) => {
-  const ordered = Array.from(new Set(slides)).sort(compareKeys);
+const isReadableHeading = (txt = "") => {
+  if (!txt || txt.length < 3) return false;
+  if (!txt.includes(" ")) return false;
+  if (/\bea\b/.test(txt) && /Tak\s*ea/.test(txt)) return false;
+  return true;
+};
 
-  ordered.forEach((src, i) => {
+const buildPages = (slides, semanticRecords) => {
+  const orderedSlides = Array.from(new Set(slides)).sort(compareKeys);
+
+  orderedSlides.forEach((src, i) => {
+    const semantic = semanticRecords[i] || {};
+    const fallbackHeading = humanize(semantic.pdf || semantic.title || `Page ${i + 1}`);
+    const heading = isReadableHeading(semantic.heading) ? semantic.heading : fallbackHeading;
+    const paragraphs = Array.isArray(semantic.paragraphs) ? semantic.paragraphs.slice(0, 8) : [];
+
     const section = document.createElement("section");
     section.className = "page";
     section.id = `page-${i + 1}`;
 
+    const paraHtml =
+      paragraphs.length > 0
+        ? paragraphs.map((p) => `<p>${p}</p>`).join("")
+        : "<p>No extractable text was detected for this page.</p>";
+
     section.innerHTML = `
       <div class="page-frame">
-        <img src="${src}" alt="${cleanLabel(src)}" loading="eager" decoding="async" />
+        <img src="${src}" alt="${heading}" loading="eager" decoding="async" />
       </div>
+      <article class="semantic" aria-label="Semantic transcript for ${heading}">
+        <h2>${heading}</h2>
+        ${paraHtml}
+      </article>
     `;
+
     pageStream.appendChild(section);
   });
 
-  return ordered.length;
+  return orderedSlides.length;
 };
 
 const setupCounter = (count) => {
@@ -75,7 +95,7 @@ const setupCounter = (count) => {
       const idx = pages.indexOf(visible.target);
       if (idx >= 0) update(idx);
     },
-    { threshold: [0.5, 0.65, 0.8] }
+    { threshold: [0.35, 0.5, 0.7] }
   );
 
   pages.forEach((p) => observer.observe(p));
@@ -83,7 +103,7 @@ const setupCounter = (count) => {
   window.addEventListener("keydown", (e) => {
     const activeIdx = pages.findIndex((p) => {
       const r = p.getBoundingClientRect();
-      return r.top <= window.innerHeight * 0.35 && r.bottom >= window.innerHeight * 0.35;
+      return r.top <= window.innerHeight * 0.3 && r.bottom >= window.innerHeight * 0.3;
     });
 
     const current = activeIdx >= 0 ? activeIdx : 0;
@@ -106,11 +126,14 @@ const setupChromeToggle = () => {
 };
 
 const init = async () => {
-  const response = await fetch("slides.json");
-  if (!response.ok) throw new Error(`Failed to load slides.json (${response.status})`);
-  const slides = await response.json();
+  const [slidesRes, semanticRes] = await Promise.all([fetch("slides.json"), fetch("report-content.json")]);
+  if (!slidesRes.ok) throw new Error(`Failed to load slides.json (${slidesRes.status})`);
+  if (!semanticRes.ok) throw new Error(`Failed to load report-content.json (${semanticRes.status})`);
 
-  const count = buildPages(slides);
+  const slides = await slidesRes.json();
+  const semantic = await semanticRes.json();
+
+  const count = buildPages(slides, semantic);
   setupCounter(count);
   setupChromeToggle();
 };
