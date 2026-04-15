@@ -1,144 +1,114 @@
-const pageStream = document.getElementById("pageStream");
-const counter = document.getElementById("counter");
-const toggleChrome = document.getElementById("toggleChrome");
-
-const humanize = (name) =>
-  name
-    .replace(/\.pdf$/i, "")
-    .replace(/^b2b report\s*-\s*/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
+const sectionsEl = document.getElementById("sections");
+const tocEl = document.getElementById("tocList");
+const searchInput = document.getElementById("searchInput");
 
 const alphaWeight = (letter = "") => (letter ? letter.toLowerCase().charCodeAt(0) - 96 : 0);
 
-const sortKey = (src) => {
+const slideSortKey = (src) => {
   const name = src.split("/").pop().replace(/\.png$/i, "").toLowerCase();
-
   const cover = name.match(/^b2b-report-01([a-z])$/);
   if (cover) return [0, 1, alphaWeight(cover[1]), 0];
-
   const slide = name.match(/^b2b-report-slide-(\d+)([a-z])?$/);
   if (slide) return [1, Number(slide[1]), alphaWeight(slide[2] || ""), 0];
-
   const variant = name.match(/^b2b-report-slide-(\d+)([a-z])-(\d+)$/);
   if (variant) return [1, Number(variant[1]), alphaWeight(variant[2]), Number(variant[3])];
-
   const group = name.match(/^group-(\d+)$/);
   if (group) return [2, Number(group[1]), 0, 0];
-
   return [3, 999, 999, 999];
 };
 
 const compareKeys = (a, b) => {
-  const ka = sortKey(a);
-  const kb = sortKey(b);
+  const ka = slideSortKey(a);
+  const kb = slideSortKey(b);
   for (let i = 0; i < ka.length; i += 1) {
     if (ka[i] !== kb[i]) return ka[i] - kb[i];
   }
   return a.localeCompare(b);
 };
 
-const isReadableHeading = (txt = "") => {
-  if (!txt || txt.length < 3) return false;
-  if (!txt.includes(" ")) return false;
-  if (/\bea\b/.test(txt) && /Tak\s*ea/.test(txt)) return false;
-  return true;
-};
+const render = (contentRows, slideRows) => {
+  const orderedSlides = Array.from(new Set(slideRows)).sort(compareKeys);
 
-const buildPages = (slides, semanticRecords) => {
-  const orderedSlides = Array.from(new Set(slides)).sort(compareKeys);
+  contentRows.forEach((row, i) => {
+    const id = `section-${row.id}`;
+    const slide = orderedSlides[i] || orderedSlides[0] || "";
 
-  orderedSlides.forEach((src, i) => {
-    const semantic = semanticRecords[i] || {};
-    const fallbackHeading = humanize(semantic.pdf || semantic.title || `Page ${i + 1}`);
-    const heading = isReadableHeading(semantic.heading) ? semantic.heading : fallbackHeading;
-    const paragraphs = Array.isArray(semantic.paragraphs) ? semantic.paragraphs.slice(0, 8) : [];
+    const article = document.createElement("article");
+    article.className = "section-card card";
+    article.id = id;
+    article.dataset.search = `${row.title} ${row.section} ${row.summary} ${(row.metrics || []).join(" ")}`.toLowerCase();
 
-    const section = document.createElement("section");
-    section.className = "page";
-    section.id = `page-${i + 1}`;
+    const chips = (row.metrics || []).map((m) => `<span class="metric">${m}</span>`).join("");
 
-    const paraHtml =
-      paragraphs.length > 0
-        ? paragraphs.map((p) => `<p>${p}</p>`).join("")
-        : "<p>No extractable text was detected for this page.</p>";
-
-    section.innerHTML = `
-      <div class="page-frame">
-        <img src="${src}" alt="${heading}" loading="eager" decoding="async" />
+    article.innerHTML = `
+      <div class="section-grid">
+        <div class="content">
+          <h3>${row.title || row.section || `Section ${row.id}`}</h3>
+          <p class="meta">${row.source || "Source PDF"}</p>
+          <p class="summary">${row.summary || "No extractable text found for this section."}</p>
+          <div class="metrics">${chips}</div>
+        </div>
+        <figure class="visual">
+          ${slide ? `<img src="${slide}" alt="Reference visual for ${row.title}" loading="lazy" decoding="async" />` : ""}
+          <figcaption>Slide-derived visual reference</figcaption>
+        </figure>
       </div>
-      <article class="semantic" aria-label="Semantic transcript for ${heading}">
-        <h2>${heading}</h2>
-        ${paraHtml}
-      </article>
     `;
 
-    pageStream.appendChild(section);
-  });
+    sectionsEl.appendChild(article);
 
-  return orderedSlides.length;
+    const tocLink = document.createElement("a");
+    tocLink.className = "toc-item";
+    tocLink.href = `#${id}`;
+    tocLink.textContent = `${row.id}. ${row.title || row.section || "Section"}`;
+    tocEl.appendChild(tocLink);
+  });
 };
 
-const setupCounter = (count) => {
-  const pages = [...document.querySelectorAll(".page")];
+const bindSearch = () => {
+  searchInput.addEventListener("input", () => {
+    const q = searchInput.value.trim().toLowerCase();
+    document.querySelectorAll(".section-card").forEach((el) => {
+      const hit = !q || el.dataset.search.includes(q);
+      el.classList.toggle("hidden", !hit);
+    });
+  });
+};
 
-  const update = (idx) => {
-    counter.textContent = `Page ${idx + 1} / ${count}`;
-  };
+const bindActiveToc = () => {
+  const links = [...document.querySelectorAll(".toc-item")];
+  const map = new Map(links.map((a) => [a.getAttribute("href")?.slice(1), a]));
 
-  const observer = new IntersectionObserver(
+  const io = new IntersectionObserver(
     (entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
+      const active = entries
+        .filter((e) => e.isIntersecting)
         .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-      if (!visible) return;
-      const idx = pages.indexOf(visible.target);
-      if (idx >= 0) update(idx);
+      if (!active) return;
+      links.forEach((l) => l.classList.remove("active"));
+      const link = map.get(active.target.id);
+      if (link) link.classList.add("active");
     },
-    { threshold: [0.35, 0.5, 0.7] }
+    { threshold: [0.45, 0.6] }
   );
 
-  pages.forEach((p) => observer.observe(p));
-
-  window.addEventListener("keydown", (e) => {
-    const activeIdx = pages.findIndex((p) => {
-      const r = p.getBoundingClientRect();
-      return r.top <= window.innerHeight * 0.3 && r.bottom >= window.innerHeight * 0.3;
-    });
-
-    const current = activeIdx >= 0 ? activeIdx : 0;
-    if (e.key === "ArrowDown" || e.key === "PageDown") {
-      const next = Math.min(current + 1, pages.length - 1);
-      pages[next].scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-    if (e.key === "ArrowUp" || e.key === "PageUp") {
-      const prev = Math.max(current - 1, 0);
-      pages[prev].scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  });
-};
-
-const setupChromeToggle = () => {
-  toggleChrome.addEventListener("click", () => {
-    document.body.classList.toggle("ui-hidden");
-    toggleChrome.textContent = document.body.classList.contains("ui-hidden") ? "Show UI" : "Hide UI";
-  });
+  document.querySelectorAll(".section-card").forEach((el) => io.observe(el));
 };
 
 const init = async () => {
-  const [slidesRes, semanticRes] = await Promise.all([fetch("slides.json"), fetch("report-content.json")]);
-  if (!slidesRes.ok) throw new Error(`Failed to load slides.json (${slidesRes.status})`);
-  if (!semanticRes.ok) throw new Error(`Failed to load report-content.json (${semanticRes.status})`);
+  const [contentRes, slideRes] = await Promise.all([fetch("website-content.json"), fetch("slides.json")]);
+  if (!contentRes.ok) throw new Error(`website-content.json failed (${contentRes.status})`);
+  if (!slideRes.ok) throw new Error(`slides.json failed (${slideRes.status})`);
 
-  const slides = await slidesRes.json();
-  const semantic = await semanticRes.json();
+  const contentRows = await contentRes.json();
+  const slideRows = await slideRes.json();
 
-  const count = buildPages(slides, semantic);
-  setupCounter(count);
-  setupChromeToggle();
+  render(contentRows, slideRows);
+  bindSearch();
+  bindActiveToc();
 };
 
 init().catch((err) => {
   console.error(err);
-  pageStream.innerHTML = `<p style="padding:20px;color:#ffb5b5">Could not load report pages.</p>`;
+  sectionsEl.innerHTML = `<article class="card" style="padding:16px;color:#8b1b1b">Failed to load website content.</article>`;
 });

@@ -3,22 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Wolt B2B Report - 1:1 Web Replica</title>
+    <title>Wolt B2B Report - Web Version</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header id="chromeBar" class="chrome-bar">
-      <div class="left">
-        <strong>Wolt B2B Report</strong>
-        <span>1:1 web replica from provided PDFs</span>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Wolt B2B Report</p>
+        <h1>Interactive Website Edition</h1>
       </div>
-      <div class="right">
-        <span id="counter">Page 1 / 1</span>
-        <button id="toggleChrome" type="button">Hide UI</button>
-      </div>
+      <label class="search-wrap">
+        <span>Search content</span>
+        <input id="searchInput" type="search" placeholder="Type a topic, metric, or keyword" />
+      </label>
     </header>
 
-    <main id="pageStream" class="page-stream" aria-live="polite"></main>
+    <div class="layout">
+      <aside class="toc" aria-label="Section navigation">
+        <h2>Sections</h2>
+        <div id="tocList" class="toc-list"></div>
+      </aside>
+
+      <main>
+        <section class="hero card">
+          <p>
+            This is a true web conversion of the provided slides: structured HTML sections,
+            searchable text extracted from the source PDFs, and slide visuals used as supporting media.
+          </p>
+        </section>
+
+        <div id="sections" class="sections"></div>
+      </main>
+    </div>
 
     <script src="app.js" defer></script>
   </body>
